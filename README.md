@@ -98,3 +98,4 @@ Note: API cookie is set by localhost:8000 while the frontend is localhost:5173; 
 - The 3D frontend is a starter; native mobile app is not included as a separate installable Android/iOS package. It is responsive in mobile browsers. The React Native app can share the API and needs its own native 3D rendering integration.
 - Production launch still needs load testing, security review, abuse controls, rate limits, retention/deletion workflows and Google OAuth verification as applicable.
 # memora
+# memora
