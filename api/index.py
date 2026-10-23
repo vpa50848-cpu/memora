@@ -1,4 +1,5 @@
 import io, os, time, uuid, secrets, string
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -177,10 +178,19 @@ def google_callback(code:str="",state:str="",error:str="",db:Session=Depends(get
   response=RedirectResponse(APP_ORIGIN+"/?oauth=success",303)
   response.set_cookie(COOKIE,cookie_token(user.id),httponly=True,secure=COOKIE_SECURE,samesite="lax",max_age=SESSION_SECONDS,path="/")
   return response
- except HTTPException: raise
+ except HTTPException:
+  raise
  except Exception as exc:
   db.rollback()
-  raise HTTPException(502,detail="Google sign-in or Drive folder creation failed. Check OAuth scopes and credentials.") from exc
+  # Full traceback appears in Vercel function logs; do not expose secrets to the browser.
+  logging.getLogger(__name__).exception(
+   "MEMORA Google OAuth callback failed (%s)",
+   type(exc).__name__,
+  )
+  raise HTTPException(
+   status_code=502,
+   detail="Google sign-in failed. Check Vercel function logs for the underlying error.",
+  ) from exc
 
 @app.get("/api/me")
 def me(user:User=Depends(current_user)):
