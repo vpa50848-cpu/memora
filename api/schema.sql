@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS memora_users (
+ id VARCHAR(36) PRIMARY KEY, google_sub VARCHAR(255) NOT NULL UNIQUE,
+ email VARCHAR(320) NOT NULL, name VARCHAR(255) NOT NULL DEFAULT '',
+ drive_folder_id VARCHAR(255) NOT NULL DEFAULT '', refresh_token_encrypted TEXT,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS memora_museums (
+ id VARCHAR(36) PRIMARY KEY, owner_id VARCHAR(36) NOT NULL REFERENCES memora_users(id) ON DELETE CASCADE,
+ name VARCHAR(120) NOT NULL, wall_color VARCHAR(30) NOT NULL DEFAULT '#c6b9a6',
+ invite_code VARCHAR(32) NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS memora_memberships (
+ id VARCHAR(36) PRIMARY KEY, museum_id VARCHAR(36) NOT NULL REFERENCES memora_museums(id) ON DELETE CASCADE,
+ user_id VARCHAR(36) NOT NULL REFERENCES memora_users(id) ON DELETE CASCADE,
+ role VARCHAR(20) NOT NULL DEFAULT 'viewer', joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ UNIQUE(museum_id,user_id)
+);
+CREATE TABLE IF NOT EXISTS memora_photos (
+ id VARCHAR(36) PRIMARY KEY, owner_id VARCHAR(36) NOT NULL REFERENCES memora_users(id) ON DELETE CASCADE,
+ museum_id VARCHAR(36) REFERENCES memora_museums(id) ON DELETE CASCADE,
+ drive_file_id VARCHAR(255) NOT NULL UNIQUE, filename VARCHAR(255) NOT NULL,
+ mime_type VARCHAR(100) NOT NULL, size_bytes BIGINT NOT NULL,
+ pos_x FLOAT NOT NULL DEFAULT 0, wall VARCHAR(20) NOT NULL DEFAULT 'back',
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS memora_presence (
+ museum_id VARCHAR(36) NOT NULL REFERENCES memora_museums(id) ON DELETE CASCADE,
+ user_id VARCHAR(36) NOT NULL REFERENCES memora_users(id) ON DELETE CASCADE,
+ display_name VARCHAR(255) NOT NULL DEFAULT '', x FLOAT NOT NULL DEFAULT 0,
+ y FLOAT NOT NULL DEFAULT 1.7, z FLOAT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(museum_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_memora_photos_owner ON memora_photos(owner_id);
+CREATE INDEX IF NOT EXISTS ix_memora_memberships_user ON memora_memberships(user_id);
+CREATE INDEX IF NOT EXISTS ix_memora_presence_museum ON memora_presence(museum_id);
