@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio } from "@livekit/components-react";
-import "@livekit/components-styles";
+// import "@livekit/components-styles";
 
 export default function VoiceRoom({museumId,onClose}) {
  const [session,setSession]=useState(null),[error,setError]=useState("");
