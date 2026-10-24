@@ -95,12 +95,19 @@ def fernet():
  except Exception: raise HTTPException(503,detail="TOKEN_ENCRYPTION_KEY is invalid.")
 def state_serializer():
  return URLSafeTimedSerializer(ENV["SESSION_SECRET"],salt="memora-oauth-state")
-def flow(state=None):
+def flow(state=None, code_verifier=None):
  need("GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI","SESSION_SECRET","TOKEN_ENCRYPTION_KEY")
  cfg={"web":{"client_id":ENV["GOOGLE_CLIENT_ID"],"client_secret":ENV["GOOGLE_CLIENT_SECRET"],
  "auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token",
  "redirect_uris":[ENV["GOOGLE_REDIRECT_URI"]]}}
- f=Flow.from_client_config(cfg,scopes=SCOPES,state=state); f.redirect_uri=ENV["GOOGLE_REDIRECT_URI"]; return f
+ f=Flow.from_client_config(
+  cfg,
+  scopes=SCOPES,
+  state=state,
+  code_verifier=code_verifier,
+ )
+ f.redirect_uri=ENV["GOOGLE_REDIRECT_URI"]
+ return f
 def cookie_token(uid):
  now=int(time.time()); return jwt.encode({"sub":uid,"iat":now,"exp":now+SESSION_SECONDS},ENV["SESSION_SECRET"],algorithm="HS256")
 def current_user(request:Request,db:Session=Depends(get_db)):
@@ -146,9 +153,21 @@ def health(): return {"status":"ok","service":"memora-api"}
 @app.get("/api/auth/google")
 def google_login():
  need("APP_ORIGIN","SESSION_SECRET")
- state=state_serializer().dumps({"nonce":secrets.token_urlsafe(24),"created":int(time.time())})
- f=flow(state=state)
- url,_=f.authorization_url(access_type="offline",include_granted_scopes="true",prompt="consent")
+
+ # Generate a PKCE verifier and preserve it in the signed, time-limited state.
+ code_verifier=secrets.token_urlsafe(64)
+ state=state_serializer().dumps({
+  "nonce":secrets.token_urlsafe(24),
+  "created":int(time.time()),
+  "code_verifier":code_verifier,
+ })
+
+ f=flow(state=state,code_verifier=code_verifier)
+ url,_=f.authorization_url(
+  access_type="offline",
+  include_granted_scopes="true",
+  prompt="consent",
+ )
  return RedirectResponse(url,302)
 
 @app.get("/api/auth/google/callback")
@@ -156,9 +175,16 @@ def google_callback(code:str="",state:str="",error:str="",db:Session=Depends(get
  need("APP_ORIGIN","SESSION_SECRET","TOKEN_ENCRYPTION_KEY")
  if error: return RedirectResponse(APP_ORIGIN+"/?oauth=cancelled",303)
  if not code or not state: raise HTTPException(400,detail="Missing OAuth code/state.")
- try: state_serializer().loads(state,max_age=600)
- except (BadSignature,SignatureExpired): raise HTTPException(400,detail="OAuth state invalid or expired.")
- f=flow(state=state)
+ try:
+  state_data=state_serializer().loads(state,max_age=600)
+ except (BadSignature,SignatureExpired):
+  raise HTTPException(400,detail="OAuth state invalid or expired.")
+
+ code_verifier=state_data.get("code_verifier") if isinstance(state_data,dict) else None
+ if not code_verifier:
+  raise HTTPException(400,detail="OAuth PKCE verifier missing. Start sign-in again.")
+
+ f=flow(state=state,code_verifier=code_verifier)
  try:
   f.fetch_token(code=code); creds=f.credentials
   svc=build("oauth2","v2",credentials=creds,cache_discovery=False)
